@@ -49,13 +49,26 @@ async def on_message(message):
             # Notificar en el canal de notificaciones
             canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
             if canal_notificaciones:
-                aviso = await canal_notificaciones.send(
-                    f"⚠️ {message.author.name} intentó enviar un enlace no permitido: {message.content}\n"
-                    "Este enlace no es de YouTube y debe ser revisado. El mensaje estará disponible durante 20 minutos."
-                )
-                # Hacer que el mensaje dure 20 minutos
-                await asyncio.sleep(1200)  # 20 minutos = 1200 segundos
-                await aviso.delete()  # Borrar el mensaje después de 20 minutos
+                # Obtener el rol de moderadores (esto es un ejemplo, cámbialo según el nombre de tu rol)
+                role_name = "Moderador"  # Cambia esto al nombre de tu rol de moderador
+                role = discord.utils.get(message.guild.roles, name=role_name)
+
+                # Si el rol existe, obtener los miembros con ese rol
+                if role:
+                    moderadores = [member.mention for member in message.guild.members if role in member.roles]
+
+                    # Crear el mensaje con los moderadores mencionados
+                    moderadores_mentions = " ".join(moderadores) if moderadores else "No hay moderadores disponibles."
+
+                    # Enviar el mensaje con el ping a los moderadores
+                    aviso = await canal_notificaciones.send(
+                        f"⚠️ {message.author.name} intentó enviar un enlace no permitido: {message.content}\n"
+                        f"Este enlace no es de YouTube y debe ser revisado. El mensaje estará disponible durante 20 minutos.\n"
+                        f"**Moderadores, por favor revisen:** {moderadores_mentions}"
+                    )
+
+                    # Usar un task para borrar el mensaje después de 20 minutos (1200 segundos)
+                    await borrar_mensaje_despues_de_20_minutos(aviso)
 
             return
 
@@ -73,25 +86,15 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# Ejecutar el bot con manejo de errores para evitar bloqueos por rate limit
-async def run_bot():
-    token = os.getenv("DISCORD_TOKEN")
-    if not token:
-        print("❌ No se encontró el token. Asegúrate de definir DISCORD_TOKEN en los secrets.")
-        return
-
-    while True:
-        try:
-            await bot.start(token)
-        except discord.HTTPException as e:
-            if e.status == 429:
-                print("⚠️ Rate limit detectado. Esperando 10 minutos...")
-                await asyncio.sleep(600)
-            else:
-                raise
-        except Exception as e:
-            print(f"⚠️ Error inesperado: {e}")
-            await asyncio.sleep(60)
+# Función que borra el mensaje después de 20 minutos
+async def borrar_mensaje_despues_de_20_minutos(aviso):
+    await asyncio.sleep(1200)  # Esperar 20 minutos (1200 segundos)
+    try:
+        await aviso.delete()  # Borrar el mensaje después de 20 minutos
+    except discord.Forbidden:
+        print("❌ El bot no tiene permisos para borrar el mensaje.")
+    except discord.NotFound:
+        print("❌ El mensaje ya no existe o fue eliminado.")
 
 # Mantener vivo el servidor web y ejecutar el bot
 keep_alive()
