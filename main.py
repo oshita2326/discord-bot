@@ -79,16 +79,6 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# Función que borra el mensaje después de 20 minutos
-async def borrar_mensaje_despues_de_20_minutos(aviso):
-    await asyncio.sleep(1200)  # Esperar 20 minutos (1200 segundos)
-    try:
-        await aviso.delete()  # Borrar el mensaje después de 20 minutos
-    except discord.Forbidden:
-        print("❌ El bot no tiene permisos para borrar el mensaje.")
-    except discord.NotFound:
-        print("❌ El mensaje ya no existe o fue eliminado.")
-
 # Mantener vivo el servidor web y ejecutar el bot
 keep_alive()
 asyncio.run(run_bot())
