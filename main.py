@@ -49,26 +49,19 @@ async def on_message(message):
             # Notificar en el canal de notificaciones
             canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
             if canal_notificaciones:
-                # Obtener el rol de moderadores (esto es un ejemplo, cámbialo según el nombre de tu rol)
-                role_name = "Moderador"  # Cambia esto al nombre de tu rol de moderador
-                role = discord.utils.get(message.guild.roles, name=role_name)
+                # Usar la ID del rol de moderadores para mencionarlo directamente
+                moderadores_role_id = 1257783733562376365  # Reemplaza con la ID de tu rol de moderadores
+                moderadores_ping = f"<@&{moderadores_role_id}>"
 
-                # Si el rol existe, obtener los miembros con ese rol
-                if role:
-                    moderadores = [member.mention for member in message.guild.members if role in member.roles]
+                # Enviar el mensaje con el ping al rol de moderadores
+                aviso = await canal_notificaciones.send(
+                    f"⚠️ {message.author.name} intentó enviar un enlace no permitido: {message.content}\n"
+                    f"Este enlace no es de YouTube y debe ser revisado. El mensaje estará disponible durante 20 minutos.\n"
+                    f"**{moderadores_ping}, por favor revisen:**"
+                )
 
-                    # Crear el mensaje con los moderadores mencionados
-                    moderadores_mentions = " ".join(moderadores) if moderadores else "No hay moderadores disponibles."
-
-                    # Enviar el mensaje con el ping a los moderadores
-                    aviso = await canal_notificaciones.send(
-                        f"⚠️ {message.author.name} intentó enviar un enlace no permitido: {message.content}\n"
-                        f"Este enlace no es de YouTube y debe ser revisado. El mensaje estará disponible durante 20 minutos.\n"
-                        f"**Moderadores, por favor revisen:** {moderadores_mentions}"
-                    )
-
-                    # Usar un task para borrar el mensaje después de 20 minutos (1200 segundos)
-                    await borrar_mensaje_despues_de_20_minutos(aviso)
+                # Usar un task para borrar el mensaje después de 20 minutos (1200 segundos)
+                await borrar_mensaje_despues_de_20_minutos(aviso)
 
             return
 
