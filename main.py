@@ -50,7 +50,7 @@ async def on_message(message):
             canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
             if canal_notificaciones:
                 # Usar la ID del rol de moderadores para mencionarlo directamente
-                moderadores_role_id = 1257783733562376365  # Reemplaza con la ID de tu rol de moderadores
+                moderadores_role_id = 1257783733562376365 # Reemplaza con la ID de tu rol de moderadores
                 moderadores_ping = f"<@&{moderadores_role_id}>"
 
                 # Enviar el mensaje con el ping al rol de moderadores
@@ -78,6 +78,16 @@ async def on_message(message):
             advertencia_cache.discard(cache_key)
 
     await bot.process_commands(message)
+
+# Función que borra el mensaje después de 20 minutos
+async def borrar_mensaje_despues_de_20_minutos(aviso):
+    await asyncio.sleep(1200)  # Esperar 20 minutos (1200 segundos)
+    try:
+        await aviso.delete()  # Borrar el mensaje después de 20 minutos
+    except discord.Forbidden:
+        print("❌ El bot no tiene permisos para borrar el mensaje.")
+    except discord.NotFound:
+        print("❌ El mensaje ya no existe o fue eliminado.")
 
 # Mantener vivo el servidor web y ejecutar el bot
 keep_alive()
