@@ -31,37 +31,43 @@ async def on_message(message):
 
     print(f"[DEBUG] Mensaje recibido de {message.author} en #{message.channel.name}: {message.content}")
 
+    # Verifica si el mensaje es del canal restringido
     if message.channel.id == CANAL_RESTRINGIDO_ID:
         tiene_enlace_youtube = bool(YOUTUBE_REGEX.search(message.content))
         tiene_mp4 = any(archivo.filename.lower().endswith('.mp4') for archivo in message.attachments)
+        tiene_imagen = any(archivo.filename.lower().endswith(('.jpg', '.jpeg', '.png')) for archivo in message.attachments)
 
-        if not tiene_enlace_youtube and not tiene_mp4:
+        # Si el mensaje no es de YouTube ni tiene un archivo .mp4, .jpg, .png
+        if not tiene_enlace_youtube and not tiene_mp4 and not tiene_imagen:
             try:
-                await message.delete()
+                await message.delete()  # Eliminar el mensaje no permitido
+                # Enviar una advertencia en el canal restringido
                 await message.channel.send(
-                    f"{message.author.mention} Solo se permiten enlaces de YouTube o archivos `.mp4`.",
+                    f"{message.author.mention} Solo se permiten enlaces de YouTube o archivos `.mp4` o imágenes válidas.",
                     delete_after=5
                 )
             except discord.Forbidden:
                 print("❌ No tengo permisos para borrar mensajes.")
 
-            # Notificar en el canal de notificaciones
+            # Notificar en el canal de notificaciones solo si el contenido no es texto
             canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
             if canal_notificaciones:
-                moderadores_role_id = 1257783733562376365  # ID del rol de moderadores
-                moderadores_ping = f"<@&{moderadores_role_id}>"
+                # Solo notificar si el mensaje contiene un enlace no de YouTube o archivos inapropiados
+                if not tiene_enlace_youtube or (not tiene_mp4 and not tiene_imagen):
+                    moderadores_role_id = 1257783733562376365  # ID del rol de moderadores
+                    moderadores_ping = f"<@&{moderadores_role_id}>"
 
-                aviso = await canal_notificaciones.send(
-                    f"⚠️ {message.author.name} intentó enviar un enlace no permitido: {message.content}\n"
-                    f"Este enlace no es de YouTube y debe ser revisado. El mensaje estará disponible durante 20 minutos.\n"
-                    f"**{moderadores_ping}, por favor revisen:**"
-                )
+                    aviso = await canal_notificaciones.send(
+                        f"⚠️ {message.author.name} intentó enviar un enlace no permitido o un archivo inapropiado: {message.content}\n"
+                        f"Este contenido debe ser revisado. El mensaje estará disponible durante 20 minutos.\n"
+                        f"**{moderadores_ping}, por favor revisen:**"
+                    )
 
-                await borrar_mensaje_despues_de_20_minutos(aviso)
+                    await borrar_mensaje_despues_de_20_minutos(aviso)
 
             return
 
-        # Enviar advertencia si aún no se envió recientemente
+        # Si el mensaje es válido (enlace de YouTube, archivo .mp4, o imagen válida), enviamos la advertencia
         cache_key = f"{message.channel.id}-{message.author.id}"
         if cache_key not in advertencia_cache:
             advertencia_cache.add(cache_key)
@@ -73,6 +79,7 @@ async def on_message(message):
             await asyncio.sleep(30)
             advertencia_cache.discard(cache_key)
 
+    # Continuar con otros eventos del bot
     await bot.process_commands(message)
 
 
@@ -85,7 +92,6 @@ async def borrar_mensaje_despues_de_20_minutos(aviso):
         print("❌ El bot no tiene permisos para borrar el mensaje.")
     except discord.NotFound:
         print("❌ El mensaje ya no existe o fue eliminado.")
-
 
 # Función para ejecutar el bot
 async def run_bot():
