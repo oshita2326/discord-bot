@@ -83,13 +83,11 @@ class RevisarContenidoView(ui.View):
             await interaction.response.send_message("❌ No tienes permisos para usar esto.", ephemeral=True)
             return
 
-        await interaction.response.send_message("🚫 Reporte ignorado. Mensaje eliminado inmediatamente.", ephemeral=True)
+        # Eliminar inmediatamente el mensaje de notificación cuando se hace clic en "Ignorar"
+        if self.mensaje_notificacion:
+            await self.mensaje_notificacion.delete()
 
-        try:
-            if self.mensaje_notificacion:
-                await self.mensaje_notificacion.delete()
-        except discord.NotFound:
-            pass
+        await interaction.response.send_message("🚫 Reporte ignorado. Mensaje eliminado inmediatamente.", ephemeral=True)
 
         canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
         if canal_notificaciones:
