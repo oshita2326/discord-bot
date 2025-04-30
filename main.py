@@ -50,12 +50,23 @@ class RevisarContenidoView(ui.View):
         else:
             await interaction.response.send_message("✅ Advertencia enviada al usuario.", ephemeral=True)
 
-        await asyncio.sleep(600)  # 10 minutos
+        # Borrar el mensaje de notificación en 5 minutos (300 segundos)
+        await asyncio.sleep(300)
         try:
             if self.mensaje_notificacion:
                 await self.mensaje_notificacion.delete()
         except discord.NotFound:
             pass
+
+        # Mensaje de "Buen trabajo"
+        canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
+        if canal_notificaciones:
+            confirmacion = await canal_notificaciones.send("✅ Buen trabajo, moderador. Acción completada.")
+            await asyncio.sleep(15)  # El mensaje se borra después de 15 segundos
+            try:
+                await confirmacion.delete()
+            except discord.NotFound:
+                pass
 
     @ui.button(label="🚫 Ignorar", style=discord.ButtonStyle.danger)
     async def ignorar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -63,13 +74,25 @@ class RevisarContenidoView(ui.View):
             await interaction.response.send_message("❌ No tienes permisos para usar esto.", ephemeral=True)
             return
 
-        await interaction.response.send_message("🚫 Reporte ignorado. El mensaje será eliminado en 10 minutos.", ephemeral=True)
-        await asyncio.sleep(600)
+        await interaction.response.send_message("🚫 Reporte ignorado. El mensaje será eliminado en 5 minutos.", ephemeral=True)
+        
+        # Borrar el mensaje de notificación en 5 minutos (300 segundos)
+        await asyncio.sleep(300)
         try:
             if self.mensaje_notificacion:
                 await self.mensaje_notificacion.delete()
         except discord.NotFound:
             pass
+
+        # Mensaje de "Buen trabajo"
+        canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
+        if canal_notificaciones:
+            confirmacion = await canal_notificaciones.send("✅ Buen trabajo, moderador. Acción completada.")
+            await asyncio.sleep(15)  # El mensaje se borra después de 15 segundos
+            try:
+                await confirmacion.delete()
+            except discord.NotFound:
+                pass
 
 
 @bot.event
@@ -82,6 +105,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    # No notificar en el canal de notificaciones si se escribe en el canal restringido
     if message.channel.id == CANAL_RESTRINGIDO_ID:
         tiene_enlace_youtube = bool(YOUTUBE_REGEX.search(message.content))
         tiene_enlace_tiktok = bool(TIKTOK_REGEX.search(message.content))
