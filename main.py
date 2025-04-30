@@ -104,11 +104,9 @@ class RevisarContenidoView(ui.View):
         else:
             await interaction.response.send_message("🚫 Solo los moderadores pueden usar este botón.", ephemeral=True)
 
-
 @bot.event
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user} (ID: {bot.user.id})')
-
 
 @bot.event
 async def on_message(message):
@@ -121,42 +119,47 @@ async def on_message(message):
         tiene_mp4 = any(archivo.filename.lower().endswith('.mp4') for archivo in message.attachments)
         tiene_imagen = any(archivo.filename.lower().endswith(('.jpg', '.jpeg', '.png')) for archivo in message.attachments)
 
-        if tiene_enlace_youtube or tiene_enlace_tiktok or tiene_mp4 or tiene_imagen:
-            cache_key = f"{message.channel.id}-{message.author.id}"
-            if cache_key not in advertencia_cache:
-                advertencia_cache.add(cache_key)
+        if not (tiene_enlace_youtube or tiene_enlace_tiktok or tiene_mp4 or tiene_imagen):
+            try:
+                await message.delete()
                 await message.channel.send(
-                    f"⚠️ {message.author.mention} Recuerda respetar las reglas y no compartir contenido explícito.",
-                    delete_after=10
+                    f"{message.author.mention} Solo se permiten enlaces de YouTube, TikTok, archivos `.mp4` o imágenes válidas.",
+                    delete_after=5
                 )
-                await asyncio.sleep(30)
-                advertencia_cache.discard(cache_key)
+            except discord.Forbidden:
+                print("❌ No tengo permisos para borrar mensajes.")
+
+            # 🔒 Solo notificar a moderadores si el mensaje tiene archivos o enlaces (no texto común)
+            tiene_adjuntos = len(message.attachments) > 0
+            tiene_enlace = "http" in message.content or "www." in message.content
+
+            if tiene_adjuntos or tiene_enlace:
+                canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
+                if canal_notificaciones:
+                    view = RevisarContenidoView(message.author, message.content)
+                    aviso = await canal_notificaciones.send(
+                        f"⚠️ {message.author.name} intentó enviar contenido no permitido en el canal restringido:\n"
+                        f"> {message.content}\n\n"
+                        f"<@&{MODERADORES_ROLE_ID}> revisen este contenido y actúen con los botones abajo.",
+                        view=view
+                    )
+                    view.mensaje_notificacion = aviso
             return
 
-        try:
-            await message.delete()
+        # Advertencia leve si es válido
+        cache_key = f"{message.channel.id}-{message.author.id}"
+        if cache_key not in advertencia_cache:
+            advertencia_cache.add(cache_key)
             await message.channel.send(
-                f"{message.author.mention} Solo se permiten enlaces de YouTube, TikTok, archivos `.mp4` o imágenes válidas.",
-                delete_after=5
+                f"⚠️ {message.author.mention} Recuerda respetar las reglas y no compartir contenido explícito.",
+                delete_after=10
             )
-        except discord.Forbidden:
-            print("❌ No tengo permisos para borrar mensajes.")
-
-        canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
-        if canal_notificaciones:
-            view = RevisarContenidoView(message.author, message.content)
-            aviso = await canal_notificaciones.send(
-                f"⚠️ {message.author.name} intentó enviar contenido no permitido en el canal restringido:\n"
-                f"> {message.content}\n\n"
-                f"<@&{MODERADORES_ROLE_ID}> revisen este contenido y actúen con los botones abajo.",
-                view=view
-            )
-            view.mensaje_notificacion = aviso
-        return
+            await asyncio.sleep(30)
+            advertencia_cache.discard(cache_key)
 
     await bot.process_commands(message)
 
-
+# Ejecutar bot
 async def run_bot():
     token = os.getenv("DISCORD_TOKEN")
     if not token:
@@ -176,7 +179,5 @@ async def run_bot():
             print(f"⚠️ Error inesperado: {e}")
             await asyncio.sleep(60)
 
-
-# Inicia el bot
 keep_alive()
 asyncio.run(run_bot())
