@@ -16,54 +16,58 @@ intents.messages = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# IDs de configuración
+# Configuración de IDs
 CANAL_RESTRINGIDO_ID = 1257783734682521677
 CANAL_NOTIFICACIONES_ID = 1327809148666122343
-MODERADORES_ROLE_ID = 1257783733562376365
+MODERADORES_ROLE_ID = 1257783733562376365  # ID del rol de moderadores
 
-# Regex para validar enlaces
+# Regex para validar contenido permitido
 YOUTUBE_REGEX = re.compile(r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/")
 TIKTOK_REGEX = re.compile(r"(https?://)?(www\.)?(tiktok\.com|vm\.tiktok\.com)/")
 
 advertencia_cache = set()
 
+# Diccionario para registrar mensajes que ya fueron revisados
+mensajes_confirmados = {}
+
+# Vista con botones de Confirmar / Ignorar / Info
 class RevisarContenidoView(ui.View):
-    def __init__(self, autor, mensaje_original):
+    def __init__(self, autor, mensaje_original, mensaje_id):
         super().__init__(timeout=None)
         self.autor = autor
         self.mensaje_original = mensaje_original
         self.mensaje_notificacion = None
+        self.mensaje_id = mensaje_id  # ID del mensaje original
 
     @ui.button(label="✅ Confirmar", style=discord.ButtonStyle.success)
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Verifica si el mensaje ya fue confirmado
+        if self.mensaje_id in mensajes_confirmados:
+            await interaction.response.send_message("❌ Este problema ya ha sido gestionado por otro moderador.", ephemeral=True)
+            return
+
         if not interaction.user.guild_permissions.manage_messages:
             await interaction.response.send_message("❌ No tienes permisos para usar esto.", ephemeral=True)
             return
 
         try:
             await self.autor.send(
-                "⚠️ Has recibido una advertencia por compartir contenido no permitido en el servidor. Por favor revisa las reglas."
+                f"⚠️ Has recibido una advertencia por compartir contenido no permitido en el servidor. Por favor revisa las reglas."
             )
         except discord.Forbidden:
             await interaction.response.send_message("❌ No se pudo enviar DM al usuario.", ephemeral=True)
         else:
             await interaction.response.send_message("✅ Advertencia enviada al usuario.", ephemeral=True)
 
-        await asyncio.sleep(300)  # Esperar 5 minutos
+        # Marcar el mensaje como confirmado
+        mensajes_confirmados[self.mensaje_id] = interaction.user.id
+
+        await asyncio.sleep(600)  # 10 minutos
         try:
             if self.mensaje_notificacion:
                 await self.mensaje_notificacion.delete()
         except discord.NotFound:
             pass
-
-        canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
-        if canal_notificaciones:
-            confirmacion = await canal_notificaciones.send("✅ Buen trabajo, moderador. Acción completada.")
-            await asyncio.sleep(15)
-            try:
-                await confirmacion.delete()
-            except discord.NotFound:
-                pass
 
     @ui.button(label="🚫 Ignorar", style=discord.ButtonStyle.danger)
     async def ignorar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -71,42 +75,33 @@ class RevisarContenidoView(ui.View):
             await interaction.response.send_message("❌ No tienes permisos para usar esto.", ephemeral=True)
             return
 
-        await interaction.response.send_message("🚫 Reporte ignorado. Mensaje eliminado inmediatamente.", ephemeral=True)
-
+        await interaction.response.send_message("🚫 Reporte ignorado. El mensaje será eliminado en 5 minutos.", ephemeral=True)
+        await asyncio.sleep(300)  # 5 minutos
         try:
             if self.mensaje_notificacion:
                 await self.mensaje_notificacion.delete()
         except discord.NotFound:
             pass
 
-        canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
-        if canal_notificaciones:
-            confirmacion = await canal_notificaciones.send("✅ Buen trabajo, moderador. Acción completada.")
-            await asyncio.sleep(15)
-            try:
-                await confirmacion.delete()
-            except discord.NotFound:
-                pass
-
-    @ui.button(label="ℹ️ Info", style=discord.ButtonStyle.secondary)
+    @ui.button(label="ℹ️ Info", style=discord.ButtonStyle.primary)
     async def info(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if any(role.id == MODERADORES_ROLE_ID for role in interaction.user.roles):
-            try:
-                await interaction.user.send(
-                    "🔍 **Información sobre los botones del bot:**\n\n"
-                    "✅ **Confirmar**: Envía una advertencia por DM al usuario que intentó compartir contenido no permitido.\n"
-                    "🚫 **Ignorar**: Descarta el reporte y borra el mensaje de notificación sin tomar medidas.\n"
-                    "ℹ️ **Info**: Envía esta descripción a ti como moderador para recordar su función."
-                )
-                await interaction.response.send_message("📩 Te he enviado la información por DM.", ephemeral=True)
-            except discord.Forbidden:
-                await interaction.response.send_message("❌ No pude enviarte un mensaje directo. Asegúrate de tenerlos activados.", ephemeral=True)
-        else:
-            await interaction.response.send_message("🚫 Solo los moderadores pueden usar este botón.", ephemeral=True)
+        # Enviar DM al moderador que presiona el botón de Info
+        if interaction.user.id != MODERADORES_ROLE_ID:
+            await interaction.response.send_message("❌ No tienes permisos para ver esta información.", ephemeral=True)
+            return
+        
+        mensaje_info = ("Este sistema permite a los moderadores gestionar contenido no permitido en el canal restringido.\n"
+                        "Cuando un moderador presiona 'Confirmar', se le envía una advertencia al autor del mensaje.\n"
+                        "Si presionas 'Ignorar', el mensaje será eliminado después de 5 minutos.")
+        
+        await interaction.user.send(mensaje_info)
+        await interaction.response.send_message("ℹ️ Te enviamos más información en tu DM.", ephemeral=True)
+
 
 @bot.event
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user} (ID: {bot.user.id})')
+
 
 @bot.event
 async def on_message(message):
@@ -119,6 +114,7 @@ async def on_message(message):
         tiene_mp4 = any(archivo.filename.lower().endswith('.mp4') for archivo in message.attachments)
         tiene_imagen = any(archivo.filename.lower().endswith(('.jpg', '.jpeg', '.png')) for archivo in message.attachments)
 
+        # Si el mensaje no tiene contenido válido (solo texto)
         if not (tiene_enlace_youtube or tiene_enlace_tiktok or tiene_mp4 or tiene_imagen):
             try:
                 await message.delete()
@@ -129,29 +125,26 @@ async def on_message(message):
             except discord.Forbidden:
                 print("❌ No tengo permisos para borrar mensajes.")
 
-            # 🔒 Solo notificar a moderadores si el mensaje tiene archivos o enlaces (no texto común)
-            tiene_adjuntos = len(message.attachments) > 0
-            tiene_enlace = "http" in message.content or "www." in message.content
+            canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
+            if canal_notificaciones:
+                view = RevisarContenidoView(message.author, message.content, message.id)
+                aviso = await canal_notificaciones.send(
+                    f"⚠️ {message.author.name} intentó enviar contenido no permitido en el canal restringido:\n"
+                    f"> {message.content}\n\n"
+                    f"<@&{MODERADORES_ROLE_ID}> revisen este contenido y actúen con los botones abajo.",
+                    view=view
+                )
+                view.mensaje_notificacion = aviso
 
-            if tiene_adjuntos or tiene_enlace:
-                canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
-                if canal_notificaciones:
-                    view = RevisarContenidoView(message.author, message.content)
-                    aviso = await canal_notificaciones.send(
-                        f"⚠️ {message.author.name} intentó enviar contenido no permitido en el canal restringido:\n"
-                        f"> {message.content}\n\n"
-                        f"<@&{MODERADORES_ROLE_ID}> revisen este contenido y actúen con los botones abajo.",
-                        view=view
-                    )
-                    view.mensaje_notificacion = aviso
             return
 
-        # Advertencia leve si es válido
+        # Envío de advertencia leve si el contenido es válido
         cache_key = f"{message.channel.id}-{message.author.id}"
         if cache_key not in advertencia_cache:
             advertencia_cache.add(cache_key)
             await message.channel.send(
-                f"⚠️ {message.author.mention} Recuerda respetar las reglas y no compartir contenido explícito.",
+                f"⚠️ {message.author.mention} Recuerda respetar las reglas y no compartir contenido explícito. "
+                "De lo contrario, podrías recibir una sanción.",
                 delete_after=10
             )
             await asyncio.sleep(30)
@@ -159,7 +152,8 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# Ejecutar bot
+
+# Función para ejecutar el bot
 async def run_bot():
     token = os.getenv("DISCORD_TOKEN")
     if not token:
@@ -179,5 +173,6 @@ async def run_bot():
             print(f"⚠️ Error inesperado: {e}")
             await asyncio.sleep(60)
 
+# Inicia el bot
 keep_alive()
 asyncio.run(run_bot())
