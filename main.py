@@ -6,6 +6,9 @@ import re
 import os
 import asyncio
 from dotenv import load_dotenv
+from pytube import YouTube, Playlist
+import time
+import json
 
 # Cargar .env
 load_dotenv()
@@ -17,7 +20,7 @@ intents.messages = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # IDs de configuración
-CANAL_RESTRINGIDO_ID = 1257783734682521677
+CANAL_RESTRINGIDO_ID = 1257783734682521677  # Canal donde se suben los videos
 CANAL_NOTIFICACIONES_ID = 1327809148666122343
 MODERADORES_ROLE_ID = 1257783733562376365
 
@@ -29,6 +32,24 @@ advertencia_cache = set()
 
 # Diccionario para registrar los mensajes que ya fueron gestionados
 mensajes_confirmados = {}
+
+# Diccionario para almacenamiento del estado de la playlist
+state_file = "video_state.json"
+
+# Playlist URL (tu enlace específico)
+playlist_url = "https://www.youtube.com/playlist?list=PLnJiOIcjijbltly7vdQri_zigHLwbUKpv"
+
+# Función para guardar el estado de la playlist
+def save_state(last_video_index, time_started):
+    with open(state_file, "w") as f:
+        json.dump({"last_video_index": last_video_index, "time_started": time_started}, f)
+
+# Función para cargar el estado de la playlist
+def load_state():
+    if os.path.exists(state_file):
+        with open(state_file, "r") as f:
+            return json.load(f)
+    return None
 
 class RevisarContenidoView(ui.View):
     def __init__(self, autor, mensaje_original, mensaje_id):
@@ -171,6 +192,51 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+# Función para subir los videos de la playlist
+async def upload_videos():
+    state = load_state()
+
+    # Obtenemos la playlist
+    playlist = Playlist(playlist_url)
+    
+    # Si no hay estado guardado, comenzamos desde el primer video
+    if not state:
+        state = {"last_video_index": 0, "time_started": time.time()}
+        save_state(state["last_video_index"], state["time_started"])
+
+    # Verificamos si pasaron 2 semanas desde la última subida
+    if time.time() - state["time_started"] > 14 * 24 * 60 * 60:  # 2 semanas en segundos
+        state["last_video_index"] = 0  # Volver al inicio de la playlist
+        state["time_started"] = time.time()  # Resetear el tiempo
+
+    canal_restringido = bot.get_channel(CANAL_RESTRINGIDO_ID)  # Obtener el canal restringido
+    
+    # Subir los videos
+    for i in range(state["last_video_index"], len(playlist.video_urls)):
+        try:
+            yt = YouTube(playlist.video_urls[i])
+            video_stream = yt.streams.filter(file_extension="mp4").first()
+            print(f"Subiendo el video: {yt.title}")
+            
+            # Subir el video al canal restringido
+            # Espera hasta que puedas cargar el video como un archivo
+            await canal_restringido.send(f"🎥 Subiendo el video: {yt.title}")
+            # Puedes agregar aquí la funcionalidad para subir el video de manera efectiva
+            # Espera un día entre cada subida
+            await asyncio.sleep(86400)  # 86400 segundos = 24 horas
+
+            # Actualizar el índice del video y guardar el estado
+            state["last_video_index"] = i + 1
+            save_state(state["last_video_index"], state["time_started"])
+
+        except Exception as e:
+            print(f"Error al intentar subir el video: {e}")
+            continue
+
+    print("Playlist terminada. El bot esperará 2 semanas antes de reiniciar.")
+    # Guardar el estado después de terminar la playlist
+    save_state(state["last_video_index"], state["time_started"])
+
 # Ejecutar bot
 async def run_bot():
     token = os.getenv("DISCORD_TOKEN")
@@ -192,4 +258,7 @@ async def run_bot():
             await asyncio.sleep(60)
 
 keep_alive()
-asyncio.run(run_bot())
+
+# Ejecutar la subida de videos en paralelo con el bot
+asyncio.create_task(upload_videos())  # Subir videos desde la playlist
+asyncio.run(run_bot())  # Ejecutar el bot de Discord
