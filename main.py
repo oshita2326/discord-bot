@@ -258,6 +258,17 @@ async def run_bot():
             await asyncio.sleep(60)
 
 keep_alive()
+# Ejecutar la subida de videos y el bot en paralelo
+async def main():
+    # Iniciar la tarea de subida de videos
+    asyncio.create_task(upload_videos())
+    # Ejecutar el bot
+    await run_bot()
+
+# Iniciar el servidor web y correr el bucle principal
+if __name__ == "__main__":
+    keep_alive()
+    asyncio.run(main())
 
 # Ejecutar la subida de videos en paralelo con el bot
 asyncio.create_task(upload_videos())  # Subir videos desde la playlist
