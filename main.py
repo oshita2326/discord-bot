@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from pytube import YouTube, Playlist
 import time
 import json
+import random
 
 # Cargar .env
 load_dotenv()
@@ -150,19 +151,20 @@ async def on_message(message):
         tiene_enlace_youtube = bool(YOUTUBE_REGEX.search(message.content))
         tiene_enlace_tiktok = bool(TIKTOK_REGEX.search(message.content))
         tiene_mp4 = any(archivo.filename.lower().endswith('.mp4') for archivo in message.attachments)
-        tiene_imagen = any(archivo.filename.lower().endswith(('.jpg', '.jpeg', '.png')) for archivo in message.attachments)
+        
+        # YA NO se permite imagen, así que no evaluamos "tiene_imagen"
 
-        if not (tiene_enlace_youtube or tiene_enlace_tiktok or tiene_mp4 or tiene_imagen):
+        if not (tiene_enlace_youtube or tiene_enlace_tiktok or tiene_mp4):
             try:
                 await message.delete()
                 await message.channel.send(
-                    f"{message.author.mention} Solo se permiten enlaces de YouTube, TikTok, archivos `.mp4` o imágenes válidas.",
+                    f"{message.author.mention} Solo se permiten enlaces de YouTube, TikTok o archivos `.mp4`.",
                     delete_after=5
                 )
             except discord.Forbidden:
                 print("❌ No tengo permisos para borrar mensajes.")
 
-            # 🔒 Solo notificar a moderadores si el mensaje tiene archivos o enlaces (no texto común)
+            # Notificar a moderadores si el mensaje tiene archivos o enlaces
             tiene_adjuntos = len(message.attachments) > 0
             tiene_enlace = "http" in message.content or "www." in message.content
 
@@ -177,8 +179,7 @@ async def on_message(message):
                         view=view
                     )
                     view.mensaje_notificacion = aviso
-            return
-
+        return
         # Advertencia leve si es válido
         cache_key = f"{message.channel.id}-{message.author.id}"
         if cache_key not in advertencia_cache:
@@ -191,6 +192,17 @@ async def on_message(message):
             advertencia_cache.discard(cache_key)
 
     await bot.process_commands(message)
+
+
+# Función para obtener un mensaje de apoyo aleatorio
+def obtener_mensaje_aleatorio():
+    mensajes = [
+        "Recordemos este gran cover, ¡Apoya a la idol Kori! 🎶",
+        "¡Kori siempre te trae alegría! 😊",
+        "Apoya a Kori, su música siempre nos inspira. 💖"
+    ]
+    return random.choice(mensajes)
+
 
 # Función para subir los videos de la playlist
 async def upload_videos():
@@ -219,9 +231,10 @@ async def upload_videos():
             print(f"Subiendo el video: {yt.title}")
             
             # Subir el video al canal restringido
-            # Espera hasta que puedas cargar el video como un archivo
+            mensaje_aleatorio = obtener_mensaje_aleatorio()
+            await canal_restringido.send(mensaje_aleatorio)
             await canal_restringido.send(f"🎥 Subiendo el video: {yt.title}")
-            # Puedes agregar aquí la funcionalidad para subir el video de manera efectiva
+
             # Espera un día entre cada subida
             await asyncio.sleep(86400)  # 86400 segundos = 24 horas
 
@@ -258,6 +271,7 @@ async def run_bot():
             await asyncio.sleep(60)
 
 keep_alive()
+
 # Ejecutar la subida de videos y el bot en paralelo
 async def main():
     # Iniciar la tarea de subida de videos
