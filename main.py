@@ -156,7 +156,7 @@ async def on_message(message):
             tiene_adjuntos = len(message.attachments) > 0
             tiene_enlace = "http" in message.content or "www." in message.content
 
-            if tiene_adjuntos or tiene_enlace:
+            if tiene_adjuntos o tiene_enlace:
                 canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
                 if canal_notificaciones:
                     view = RevisarContenidoView(message.author, message.content, message.id)
@@ -180,46 +180,53 @@ def obtener_mensaje_aleatorio():
     ]
     return random.choice(mensajes)
 
-# Subida automática de enlaces de videos
+# Subida automática de enlaces de videos (solo un video)
 async def upload_videos():
-    while True:
-        try:
-            state = load_state()
-            playlist = Playlist(playlist_url)
+    try:
+        # Cargar el estado (último índice de video y tiempo de inicio)
+        state = load_state()
+        playlist = Playlist(playlist_url)
 
-            if not state:
-                state = {"last_video_index": 0, "time_started": time.time()}
-                save_state(state["last_video_index"], state["time_started"])
-
-            if time.time() - state["time_started"] > 14 * 24 * 60 * 60:
-                state["last_video_index"] = 0
-                state["time_started"] = time.time()
-
-            if state["last_video_index"] >= len(playlist.video_urls):
-                print("✅ Playlist completada. Esperando una hora...")
-                await asyncio.sleep(3600)
-                continue
-
-            canal_restringido = bot.get_channel(CANAL_RESTRINGIDO_ID)
-            if not canal_restringido:
-                print("❌ No se pudo acceder al canal.")
-                await asyncio.sleep(600)
-                continue
-
-            video_url = playlist.video_urls[state["last_video_index"]]
-            yt = YouTube(video_url)
-            mensaje_aleatorio = obtener_mensaje_aleatorio()
-
-            await canal_restringido.send(mensaje_aleatorio)
-            await canal_restringido.send(f"🎥 **Nuevo video de Kori:** {yt.title}\n{yt.watch_url}")
-
-            state["last_video_index"] += 1
+        if not state:
+            state = {"last_video_index": 0, "time_started": time.time()}
             save_state(state["last_video_index"], state["time_started"])
 
-        except Exception as e:
-            print(f"⚠️ Error en upload_videos: {e}")
+        if time.time() - state["time_started"] > 14 * 24 * 60 * 60:
+            state["last_video_index"] = 0
+            state["time_started"] = time.time()
 
-        await asyncio.sleep(20)  # Espera 20 segundos entre cada video (modo prueba)
+        # Asegúrate de que haya videos disponibles en la playlist
+        if state["last_video_index"] >= len(playlist.video_urls):
+            print("✅ Playlist completada. No hay videos para compartir.")
+            return  # No más videos, terminar la ejecución
+
+        # Obtener el canal de Discord donde se enviarán los videos
+        canal_restringido = bot.get_channel(CANAL_RESTRINGIDO_ID)
+        if not canal_restringido:
+            print("❌ No se pudo acceder al canal.")
+            return
+
+        # Obtener la URL del video
+        video_url = playlist.video_urls[state["last_video_index"]]
+        yt = YouTube(video_url)
+        mensaje_aleatorio = obtener_mensaje_aleatorio()
+
+        # Esperar 10 segundos antes de enviar el video
+        await asyncio.sleep(10)
+
+        # Enviar el mensaje con el título del video y el enlace
+        await canal_restringido.send(mensaje_aleatorio)
+        await canal_restringido.send(f"🎥 **Nuevo video de Kori:** {yt.title}\n{yt.watch_url}")
+
+        # Actualizar el índice y guardar el estado
+        state["last_video_index"] += 1
+        save_state(state["last_video_index"], state["time_started"])
+
+    except Exception as e:
+        print(f"⚠️ Error en upload_videos: {e}")
+
+    # Solo compartir un video, no esperar entre videos
+    print("✅ Video compartido. Finalizando la prueba.")
 
 # Arranque del bot
 async def run_bot():
