@@ -6,7 +6,6 @@ import re
 import os
 import asyncio
 from dotenv import load_dotenv
-from pytube import YouTube, Playlist
 import time
 import json
 import random
@@ -30,24 +29,10 @@ MODERADORES_ROLE_ID = 1257783733562376365
 YOUTUBE_REGEX = re.compile(r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/")
 TIKTOK_REGEX = re.compile(r"(https?://)?(www\.)?(tiktok\.com|vm\.tiktok\.com)/")
 
-# Estado y cache
-advertencia_cache = set()
+# Cache y estado
 mensajes_confirmados = {}
-state_file = "video_state.json"
-playlist_url = "https://www.youtube.com/playlist?list=PLnJiOIcjijbltly7vdQri_zigHLwbUKpv"
 
-# Funciones para guardar y cargar estado
-def save_state(last_video_index, time_started):
-    with open(state_file, "w") as f:
-        json.dump({"last_video_index": last_video_index, "time_started": time_started}, f)
-
-def load_state():
-    if os.path.exists(state_file):
-        with open(state_file, "r") as f:
-            return json.load(f)
-    return None
-
-# Vista interactiva para moderadores
+# Vista para revisión de contenido
 class RevisarContenidoView(ui.View):
     def __init__(self, autor, mensaje_original, mensaje_id):
         super().__init__(timeout=None)
@@ -59,17 +44,15 @@ class RevisarContenidoView(ui.View):
     @ui.button(label="✅ Confirmar", style=discord.ButtonStyle.success)
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.mensaje_id in mensajes_confirmados:
-            await interaction.response.send_message("❌ Este problema ya ha sido gestionado.", ephemeral=True)
+            await interaction.response.send_message("❌ Este problema ya fue gestionado.", ephemeral=True)
             return
 
         if not interaction.user.guild_permissions.manage_messages:
-            await interaction.response.send_message("❌ No tienes permisos para usar esto.", ephemeral=True)
+            await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
             return
 
         try:
-            await self.autor.send(
-                "⚠️ Has recibido una advertencia por compartir contenido no permitido en el servidor."
-            )
+            await self.autor.send("⚠️ Has recibido una advertencia por compartir contenido no permitido.")
         except discord.Forbidden:
             await interaction.response.send_message("❌ No se pudo enviar DM al usuario.", ephemeral=True)
         else:
@@ -96,7 +79,7 @@ class RevisarContenidoView(ui.View):
     @ui.button(label="🚫 Ignorar", style=discord.ButtonStyle.danger)
     async def ignorar(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_messages:
-            await interaction.response.send_message("❌ No tienes permisos para usar esto.", ephemeral=True)
+            await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
             return
 
         if self.mensaje_notificacion:
@@ -118,10 +101,7 @@ class RevisarContenidoView(ui.View):
         if any(role.id == MODERADORES_ROLE_ID for role in interaction.user.roles):
             try:
                 await interaction.user.send(
-                    "🔍 **Botones del bot:**\n"
-                    "✅ Confirmar: Advierte al usuario.\n"
-                    "🚫 Ignorar: Descarta el reporte.\n"
-                    "ℹ️ Info: Esta descripción."
+                    "🔍 **Botones del bot:**\n✅ Confirmar: Advierte al usuario.\n🚫 Ignorar: Descarta el reporte.\nℹ️ Info: Muestra esta ayuda."
                 )
                 await interaction.response.send_message("📩 Info enviada por DM.", ephemeral=True)
             except discord.Forbidden:
@@ -180,60 +160,28 @@ def obtener_mensaje_aleatorio():
     ]
     return random.choice(mensajes)
 
-# Subida automática de enlaces de videos (solo un video)
-async def upload_videos():
-    try:
-        # Cargar el estado (último índice de video y tiempo de inicio)
-        state = load_state()
-        playlist = Playlist(playlist_url)
+# Enviar enlace después de 15 segundos
+async def enviar_video_una_vez():
+    await asyncio.sleep(15)
+    canal = bot.get_channel(CANAL_RESTRINGIDO_ID)
+    if canal:
+        mensaje = obtener_mensaje_aleatorio()
+        enlace = "https://youtu.be/0ki-6PY-uaM?si=o3iNqMUIdvq5RyxV" # Sustituye por tu enlace
+        await canal.send(mensaje)
+        await canal.send(f"🎥 **Cover maravilloso de Kori:**\n{enlace}")
+        print("✅ Video enviado con éxito.")
+    else:
+        print("❌ No se encontró el canal.")
 
-        if not state:
-            state = {"last_video_index": 0, "time_started": time.time()}
-            save_state(state["last_video_index"], state["time_started"])
-
-        if time.time() - state["time_started"] > 14 * 24 * 60 * 60:
-            state["last_video_index"] = 0
-            state["time_started"] = time.time()
-
-        # Asegúrate de que haya videos disponibles en la playlist
-        if state["last_video_index"] >= len(playlist.video_urls):
-            print("✅ Playlist completada. No hay videos para compartir.")
-            return  # No más videos, terminar la ejecución
-
-        # Obtener el canal de Discord donde se enviarán los videos
-        canal_restringido = bot.get_channel(CANAL_RESTRINGIDO_ID)
-        if not canal_restringido:
-            print("❌ No se pudo acceder al canal.")
-            return
-
-        # Obtener la URL del video
-        video_url = playlist.video_urls[state["last_video_index"]]
-        yt = YouTube(video_url)
-        mensaje_aleatorio = obtener_mensaje_aleatorio()
-
-        # Esperar 10 segundos antes de enviar el video
-        await asyncio.sleep(10)
-
-        # Enviar el mensaje con el título del video y el enlace
-        await canal_restringido.send(mensaje_aleatorio)
-        await canal_restringido.send(f"🎥 **Nuevo video de Kori:** {yt.title}\n{yt.watch_url}")
-
-        # Actualizar el índice y guardar el estado
-        state["last_video_index"] += 1
-        save_state(state["last_video_index"], state["time_started"])
-
-    except Exception as e:
-        print(f"⚠️ Error en upload_videos: {e}")
-
-    # Solo compartir un video, no esperar entre videos
-    print("✅ Video compartido. Finalizando la prueba.")
-
-# Arranque del bot
+# Función para ejecutar el bot
 async def run_bot():
     token = os.getenv("DISCORD_TOKEN")
     if not token:
-        print("❌ Token no encontrado. Configura DISCORD_TOKEN en el entorno.")
+        print("❌ No se encontró el token. Asegúrate de definir DISCORD_TOKEN en Render (secrets).")
         return
+
+    # Iniciar tarea del video al iniciar el bot
+    asyncio.create_task(enviar_video_una_vez())
 
     while True:
         try:
@@ -248,14 +196,6 @@ async def run_bot():
             print(f"⚠️ Error inesperado: {e}")
             await asyncio.sleep(60)
 
-# Ejecutar la subida de videos y el bot en paralelo
-async def main():
-    # Iniciar la tarea de subida de videos
-    asyncio.create_task(upload_videos())
-    # Ejecutar el bot
-    await run_bot()
-
-# Iniciar el servidor web y correr el bucle principal
-if __name__ == "__main__":
-    keep_alive()
-    asyncio.run(main())
+# Mantener vivo el servidor web y ejecutar el bot
+keep_alive()
+asyncio.run(run_bot())
