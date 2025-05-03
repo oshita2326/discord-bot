@@ -227,6 +227,7 @@ class RevisarContenidoView(ui.View):
 @bot.event
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user} (ID: {bot.user.id})')
+    asyncio.create_task(enviar_video_una_vez())  # <-- aquí mejor
 
 @bot.event
 async def on_message(message):
@@ -273,8 +274,7 @@ async def run_bot():
         print("❌ No se encontró el token. Asegúrate de definir DISCORD_TOKEN en Render (secrets).")
         return
 
-    # Iniciar tarea del video al iniciar el bot
-    asyncio.create_task(enviar_video_una_vez())
+
 
     while True:
         try:
