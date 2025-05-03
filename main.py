@@ -156,7 +156,7 @@ async def on_message(message):
             tiene_adjuntos = len(message.attachments) > 0
             tiene_enlace = "http" in message.content or "www." in message.content
 
-            if tiene_adjuntos o tiene_enlace:
+            if tiene_adjuntos or tiene_enlace:
                 canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
                 if canal_notificaciones:
                     view = RevisarContenidoView(message.author, message.content, message.id)
