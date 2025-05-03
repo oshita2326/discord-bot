@@ -138,7 +138,8 @@ async def enviar_video_una_vez():
     else:
         print("❌ No se encontró el canal.")
 
-# Vista para revisión de contenido
+mensajes_confirmados = {}
+
 class RevisarContenidoView(ui.View):
     def __init__(self, autor, mensaje_original, mensaje_id):
         super().__init__(timeout=None)
@@ -149,23 +150,29 @@ class RevisarContenidoView(ui.View):
 
     @ui.button(label="✅ Confirmar", style=discord.ButtonStyle.success)
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Verificar si ya fue gestionado
         if self.mensaje_id in mensajes_confirmados:
-            await interaction.response.send_message("❌ Este problema ya fue gestionado.", ephemeral=True)
+            await interaction.response.send_message("❌ Este problema ya fue gestionado por otro moderador.", ephemeral=True)
             return
 
+        # Verificar permisos del moderador
         if not interaction.user.guild_permissions.manage_messages:
             await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
             return
 
         try:
+            # Intentar enviar la advertencia por DM
             await self.autor.send("⚠️ Has recibido una advertencia por compartir contenido no permitido.")
         except discord.Forbidden:
             await interaction.response.send_message("❌ No se pudo enviar DM al usuario.", ephemeral=True)
         else:
             await interaction.response.send_message("✅ Advertencia enviada.", ephemeral=True)
+            print(f"✔️ Advertencia enviada a {self.autor.name}.")
 
+        # Registrar la acción del moderador
         mensajes_confirmados[self.mensaje_id] = interaction.user.id
 
+        # Esperar 5 minutos antes de borrar la notificación
         await asyncio.sleep(300)
         if self.mensaje_notificacion:
             try:
@@ -173,6 +180,7 @@ class RevisarContenidoView(ui.View):
             except discord.NotFound:
                 pass
 
+        # Enviar confirmación en el canal de notificaciones
         canal_notificaciones = bot.get_channel(CANAL_NOTIFICACIONES_ID)
         if canal_notificaciones:
             confirmacion = await canal_notificaciones.send("✅ Acción completada por moderador.")
