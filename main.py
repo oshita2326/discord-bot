@@ -221,6 +221,7 @@ class RevisarContenidoView(ui.View):
             await interaction.response.send_message("🚫 Solo moderadores pueden usar este botón.", ephemeral=True)
 async def tarea_diaria():
     await bot.wait_until_ready()
+    await enviar_video_una_vez()
     while not bot.is_closed():
         await enviar_video_una_vez()
         await asyncio.sleep(86400)  # Espera de 24 horas
