@@ -55,7 +55,7 @@ ENLACES = [
     "https://youtu.be/baozXQFVfG8?si=Z_dWm3VUFTxzG-PX",
     "https://youtu.be/lcGuFZpCZR4?si=RIxz9q9_Vrv0czZv"
 ]
-
+ENLACES_ORIGINALES = ENLACES.copy()
 # Estado del bot (cuando se tomará el descanso de una semana)
 estado = {"ultimo_enlace": None, "fecha_descanso": None, "fecha_ultimo_envio": None}
 
@@ -98,11 +98,8 @@ async def enviar_video_una_vez():
         # Si ha pasado la pausa, reiniciar el proceso
         print("✅ Pausa terminada, el bot volverá a compartir enlaces.")
         estado["fecha_descanso"] = None  # Terminar la pausa
-        ENLACES.extend([  # Restaurar los enlaces disponibles
-            "https://youtu.be/0ki-6PY-uaM?si=o3iNqMUIdvq5RyxV", 
-            "https://youtu.be/link2",
-            "https://youtu.be/link3"
-        ])
+        ENLACES.clear()
+        ENLACES.extend(ENLACES_ORIGINALES)
         guardar_estado()
 
     # Verificar si ya ha pasado el día para enviar un nuevo enlace
@@ -121,7 +118,7 @@ async def enviar_video_una_vez():
     enlace = random.choice(ENLACES)
     mensaje = obtener_mensaje_aleatorio()
 
-    canal = bot.get_channel(CANAL_RESTRINGIDO_ID)
+    canal = await bot.fetch_channel(CANAL_RESTRINGIDO_ID)
     if canal:
         await asyncio.sleep(15)  # Esperar 15 segundos
         await canal.send(mensaje)
@@ -222,12 +219,16 @@ class RevisarContenidoView(ui.View):
                 await interaction.response.send_message("❌ No se pudo enviar DM.", ephemeral=True)
         else:
             await interaction.response.send_message("🚫 Solo moderadores pueden usar este botón.", ephemeral=True)
-
+async def tarea_diaria():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        await enviar_video_una_vez()
+        await asyncio.sleep(86400)  # Espera de 24 horas
 # Configuración de los eventos del bot
 @bot.event
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user} (ID: {bot.user.id})')
-    asyncio.create_task(enviar_video_una_vez())  # <-- aquí mejor
+    bot.loop.create_task(tarea_diaria())  # Ejecuta la tarea diaria automáticamente
 
 @bot.event
 async def on_message(message):
